@@ -1,82 +1,5 @@
 <?php
 
-define('TAINACAN_INVENTARIOS_ADMIN_OPTIONS', [
-	'Navegação' => [
-		'hideTainacanHeaderSearchInput' => 'Esconder campo de busca no cabeçalho do Tainacan',
-		'hideTainacanHeaderAdvancedSearch' => 'Esconder busca avançada no cabeçalho do Tainacan',
-		'hideTainacanHeaderProcessesPopup' => 'Esconder popup de processos no cabeçalho do Tainacan',
-		'hideRepositorySubheaderExportButton' => 'Esconder cabeçalho do repositório',
-		'hideRepositorySubheaderViewCollectionsButton' => 'Esconder botão de ver coleções no cabeçalho do repositório',
-    	'hideRepositorySubheaderViewCollectionButton' => 'Esconder botão de ver coleção no cabeçalho do repositório',
-    	'hideRepositorySubheaderExportButton' => 'Esconder botão de exportar no cabeçalho do repositório',
-		'hideCollectionSubheader' => 'Esconder cabeçalho da coleção',
-		'hidePrimaryMenu' => 'Esconder todo o menu lateral',
-		'hidePrimaryMenuCompressButton' => 'Esconder o botão de comprimir o menu lateral',
-        'hidePrimaryMenuRepositoryButton' => 'Esconder o botão do repositório do menu lateral',
-        'hidePrimaryMenuCollectionsButton' => 'Esconder o botão de coleções do menu lateral',
-        'hidePrimaryMenuItemsButton' => 'Esconder o botão de itens do menu lateral',
-        'hidePrimaryMenuTaxonomiesButton' => 'Esconder o botão de taxonomias do menu lateral',
-        'hidePrimaryMenuMetadataButton' => 'Esconder o botão de metadados do menu lateral',
-        'hidePrimaryMenuFiltersButton' => 'Esconder o botão de filtros do menu lateral',
-        'hidePrimaryMenuImportersButton' => 'Esconder o botão de importadores do menu lateral',
-        'hidePrimaryMenuExportersButton' => 'Esconder o botão de exportadores do menu lateral',
-        'hidePrimaryMenuActivitiesButton' => 'Esconder o botão de atividades do menu lateral',
-        'hidePrimaryMenuCapabilitiesButton' => 'Esconder o botão de permissões do menu lateral'
-	],
-	'Página inicial' => [
-		'hideHomeRepositorySection' => 'Esconder sessão do repositório',
-		'hideHomeThemeCollectionsButton' => 'Esconder botão das coleções no tema',
-        'hideHomeThemeItemsButton' => 'Esconder botão dos itens no tema',
-        'hideHomeTaxonomiesButton' => 'Esconder botão das taxonomias',
-        'hideHomeMetadataButton' => 'Esconder botão dos metadados nível repositório',
-        'hideHomeFiltersButton' => 'Esconder botão dos filtros nível repositório',
-        'hideHomeImportersButton' => 'Esconder botão dos importadores',
-        'hideHomeExportersButton' => 'Esconder botão dos exportadores',
-        'hideHomeActivitiesButton' => 'Esconder botão de atividades',
-		'hideHomeCollectionsButton' => 'Esconder botão de coleções',
-		'hideHomeCollectionSettingsButton' => 'Esconder botão de configuração na sessão de coleções',
-		'hideHomeCollectionMetadataButton' => 'Esconder botão de metadados na sessão de coleções',
-		'hideHomeCollectionFiltersButton' => 'Esconder botão de filtros na sessão de coleções',
-		'hideHomeCollectionActivitiesButton' => 'Esconder botão de atividades na sessão de coleções',
-		'hideHomeCollectionThemeCollectionButton' => 'Esconder botão de "ver no tema" na sessão de coleções',
-		'showHomeCollectionCreateItemButton' => 'Mostrar botão de criar item na sessão de coleções'
-	],
-	'Lista de itens' => [
-		'hideItemsListBulkActionsButton' => 'Esconder botão de ações em massa',
-		'hideItemsListMultipleSelection' => 'Esconder multipla seleção de itens',
-		'hideItemsListSelection' => 'Esconder seleção individual de itens',
-		'hideItemsListExposersButton' => 'Esconder botão de "Ver como..."',
-		'hideItemsListStatusTabs' => 'Esconder abas de status',
-		'hideItemsListStatusTabsTotalItems' => 'Esconder o total de itens nas abas de status',
-		'hideItemsListCreationDropdownBulkAdd' => 'Esconder botão de adicionar em massa no dropdown de criação',
-		'hideItemsListCreationDropdownImport' => 'Esconder botão de importar no dropdown de criação',
-		'hideItemsListContextMenu' => 'Esconder menu que aparece com o clique direito',
-		'hideItemsListFilterCreationButton' => 'Esconder botão de criar filtros'
-	],
-	'Página de edição do item' => [
-		'hideItemEditionCollectionName' => 'Esconder nome da coleção',
-		'hideItemEditionStatusOptions' => 'Esconder opções de status',
-		'hideItemEditionStatusPublishOption' => 'Esconder a opção de status público',
-		'hideItemEditionCommentsToggle' => 'Esconder opção de comentários',
-		'hideItemEditionDocument' => 'Esconder por completo entrada de documento',
-		'hideItemEditionDocumentFileInput' => 'Esconder entrada de documento tipo Arquivo',
-		'hideItemEditionDocumentTextInput' => 'Esconder entrada de documento tipo Texto',
-		'hideItemEditionDocumentUrlInput' => 'Esconder entrada de documento tipo URL',
-		'hideItemEditionThumbnail' => 'Esconder miniatura',
-		'allowItemEditionModalInsideModal' => 'Permitir modal de criação de itens dentro de outro modal'
-	],
-	'Página do item' => [
-		'hideItemSingleCollectionName' => 'Esconder nome da coleção',
-		'hideItemSingleCurrentStatus' => 'Esconder status',
-		'hideItemSingleCurrentVisibility' => 'Esconder visibilidade',
-		'hideItemSingleCommentsOpen' => 'Esconder condição dos comentários',
-		'hideItemSingleDocument' => 'Esconder documento',
-		'hideItemSingleThumbnail' => 'Esconder miniatura',
-		'hideItemSingleActivities' => 'Esconder atividades',
-		'hideItemSingleExposers' => 'Esconder botão de "Ver como..."'
-	]
-]);
-
 function tainacan_inventarios_get_restrictive_roles() {
 	$roles = get_option('tainacan_inventarios_set_role_to_restrict_access', []);
 	return $roles;
@@ -555,35 +478,7 @@ function tainacan_inventarios_set_role_to_restrict_access_items_form()
 			</ul>
 			<p><span class="dashicons dashicons-info"></span>&nbsp;<?php _e('Se nenhuma coleção for marcada, todas as com direito de acesso serão vistas obedecendo seu status.', 'tainacan-inventarios'); ?></p>
 		</div>
-		<br>
-		<div class="name-edition-box tainacan-admin-options-by-role" >
-			<h2 style="margin-bottom: -1em; font-size: 0.875rem;"><?php _e('Opções de customização da interface administrativa', 'tainacan-inventarios'); ?></h2>
-			<div class="admin-options-container capabilities-list" style="justify-content: flex-start;">
-				<?php foreach(TAINACAN_INVENTARIOS_ADMIN_OPTIONS as $tainacan_admin_options_group_name => $tainacan_admin_options_group) : ?>
-					<div 
-							style="flex-basis: 400px; margin-right: unset;"
-							class="capability-group">
-						<h3><?php _e($tainacan_admin_options_group_name, 'tainacan-inventarios'); ?></h3>
-						<ul>
-							<?php foreach($tainacan_admin_options_group as $tainacan_admin_available_option_value => $tainacan_admin_available_option_label) : ?>
-								<li style="width: 100%">
-									<span class="check-column">
-										<label for="<?php echo $tainacan_admin_available_option_value ?>" class="screen-reader-text">
-											<?php _e($tainacan_admin_available_option_label, 'tainacan-inventarios'); ?>
-										</label>
-										<input type="checkbox" name="tainacan_admin_options_by_role" id="<?php echo $tainacan_admin_available_option_value ?>" value="<?php echo $tainacan_admin_available_option_value ?>">
-									</span>
-									<span class="name column-name">
-										<?php _e($tainacan_admin_available_option_label, 'tainacan-inventarios'); ?>
-									</span>
-								</li>
-							<?php endforeach; ?>
-						</ul>
-					</div>
-				<?php endforeach; ?>
-			</div>
-		</div>
-
+		
 	<?php
 	return ob_get_clean();
 }
@@ -594,9 +489,7 @@ function tainacan_inventarios_set_role_to_restrict_access_items_create($role, $r
 	$slug = $role['slug'];
 	$roles = get_option('tainacan_inventarios_set_role_to_restrict_access', []);
 	$roles_collections = get_option('tainacan_inventarios_collections_access_by_role', []);
-	$admin_options_collections = get_option('tainacan_inventarios_admin_options_by_role', []);
 	$roles_collections = is_array($roles_collections) ? $roles_collections : [];
-	$admin_options_collections = is_array($admin_options_collections) ? $admin_options_collections : [];
 
 	if( $request->get_method() != 'GET')
 	{
@@ -626,26 +519,13 @@ function tainacan_inventarios_set_role_to_restrict_access_items_create($role, $r
 			}
 		}
 
-		if( isset($request['tainacan_admin_options_by_role']) )
-		{
-			$update_options = $request['tainacan_admin_options_by_role'];
-			update_option('tainacan_inventarios_admin_options_by_role', array_merge($admin_options_collections, [ $slug => $update_options ] ) );
-			$role['tainacan_admin_options_by_role'] = $update_options;
-		}
-		else
-		{
-			if( isset($admin_options_collections[$slug]) ) unset($admin_options_collections[$slug]);
-			update_option('tainacan_inventarios_admin_options_by_role', $admin_options_collections );
-		}
 	}
 	else
 	{
 		$set_role = in_array($slug, $roles);
 		$collections_role =  isset($roles_collections[$slug]) ? $roles_collections[$slug] : [];
-		$admin_options_collections = isset($admin_options_collections[$slug]) ? $admin_options_collections[$slug] : [];
 		$role['collections_access_by_role'] = $collections_role;
 		$role['set_role_to_restrict_access'] = $set_role ? 'yes' : 'no';
-		$role['tainacan_admin_options_by_role'] = $admin_options_collections;
 	}
 	return $role;
 }

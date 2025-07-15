@@ -244,36 +244,4 @@ function tainacan_inventarios_customize_form_hooks_css() {
 }
 add_action('admin_head', 'tainacan_inventarios_customize_form_hooks_css');
 
-/*
- * Sends params to the Tainacan Admin Options to hide certain elements according to user caps
- */
-function tainacan_inventarios_set_tainacan_admin_options($options) {
-	
-	if ( is_user_logged_in() ) {
-		$user = wp_get_current_user();
-		$roles = ( array ) $user->roles;
-		$tainacan_inventarios_tainacan_admin_options = [];
-		$admin_options_collections = get_option('tainacan_inventarios_tainacan_admin_options_by_role', []);
-		$admin_options_collections = is_array($admin_options_collections) ? $admin_options_collections : [];
-
-		foreach($roles as $role) {
-			if ( isset($admin_options_collections[$role])) {
-				foreach($admin_options_collections[$role] as $option) {
-					
-					$tainacan_inventarios_tainacan_admin_options[$option] = true;
-
-					if ($option == 'hideHomeCollectionsButton') {
-						$tainacan_inventarios_tainacan_admin_options['homeCollectionsPerPage'] = 18;
-					}
-				}
-				$tainacan_inventarios_tainacan_admin_options['homeCollectionsOrderBy'] = 'title';
-				$tainacan_inventarios_tainacan_admin_options['homeCollectionsOrder'] = 'asc';
-			}
-		}
-		$options = array_merge($options, $tainacan_inventarios_tainacan_admin_options);
-	}
-	return $options;
-};
-add_filter('tainacan-admin-ui-options', 'tainacan_inventarios_set_tainacan_admin_options');
-
 require_once __DIR__ . '/inc/imports.php';
