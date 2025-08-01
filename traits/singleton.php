@@ -1,5 +1,9 @@
 <?php
+
 namespace Tainacan_Inventarios;
+
+// Evita acesso direto ao arquivo
+defined( 'ABSPATH' ) or die( 'No script kiddies please!' );
 
 trait Singleton {
 
