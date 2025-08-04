@@ -1,5 +1,28 @@
 <?php
 
+/**
+ * FILTROS EXPANDIDOS DE RELACIONAMENTO
+ * 
+ * Com o uso extensivo de relacionamentos em Acervos de Inventários, o metadado de relacionamento
+ * vira uma poderosa ferramenta de organização de dados, viabilizando coleções separadas por funções
+ * como as coleções de controle. Surge desse uso porém, uma nova demanda: a de se filtrar por
+ * diferentes metadados das coleções relacionadas.
+ * 
+ * Em um metadado tipo relacionamento, o valor guardado no item é o título e ID do item relacionado.
+ * Demais metadados do mesmo item podem ser mostrados na página do item em si, mas não são encontrados
+ * em uma busca com filtros, por exemplo. Para isso seria preciso fazer uma consulta com "saltos duplos",
+ * onde primeiro busca-se nos itens relacionados e depois nos demais metadados dos itens relacionados.
+ * 
+ * Esta classe implementa uma lógica para se guardar em metadados internos escondidos (metadados de controle
+ * do Tainacan) cópias dos dados relacionados na coleção onde um item está relacionado. Com a existência
+ * destes dados torna-se possível a criação de filtros a partir dos mesmos, onde tornam-se acessíveis via
+ * facetas os valores que estão em coleções relacionadas.
+ * 
+ * A abordagem adotada aqui não é razoável para cenários de dados de volume muito alto, por isso é 'opt-in':
+ * o usuário deve configurar quais relacionamentos devem ser "expandidos" manualmente.
+ *
+ */
+
 namespace Tainacan_Inventarios;
 
 // Evita acesso direto ao arquivo
@@ -9,28 +32,43 @@ class Expanded_Filter_Relationship {
 
 	use Singleton;
 
-	public $is_expanded_filter_field = 'tainacan-inventarios-is-expanded-filter';
+	public $has_expanded_filters_field = 'tainacan-inventarios-has-expanded-filters';
 
 	protected function init() {
 
 		// Lógica para adicionar a opção extra no formulário definirá se os filtros do metadado de relacionamento serão expandidos ou não
 		add_action( 'tainacan-register-admin-hooks', array( $this, 'register_hook' ) );
-		add_action( 'tainacan-insert-tainacan-metadatum', array( $this, 'create' ), 10, 2 );
-		add_action( 'tainacan-deleted-tainacan-metadatum', array( $this, 'remove' ), 10, 2 );
+		add_action( 'tainacan-insert-tainacan-metadatum', array( $this, 'create_control_metadata' ), 10, 2 );
+		add_action( 'tainacan-deleted-tainacan-metadatum', array( $this, 'remove_control_metadata' ), 10, 2 );
 		add_filter( 'tainacan-api-response-metadatum-meta', array( $this, 'add_meta_to_response'), 10, 2 );
 
-		add_action( 'tainacan-insert-Item_Metadata_Entity', array( $this, 'update_filter_values' ), 10, 2 );
+		add_action( 'tainacan-insert-Item_Metadata_Entity', array( $this, 'update_control_metadata_values' ), 10, 2 );
 		add_filter( 'tainacan-fetch-all-metadatum-values', array( $this, 'fetch_all_metadatum_values'), 10, 3 );
 		add_filter( 'tainacan-api-prepare-items-args', array( $this, 'replace_prepare_items_args'), 10, 2 );
 	}
 
-	function register_hook() {
+	/**
+     * Usa da action 'tainacan-register-admin-hooks' para registrar uma nova área de formulários
+     * extra no modal de edição do metadado Tainacan, onde ficará a opção de expansão dos filtros
+     */
+	public function register_hook() {
 		if ( function_exists( 'tainacan_register_admin_hook' ) ) {
-			tainacan_register_admin_hook( 'metadatum', array( $this, 'form'), 'end-left', [ 'attribute' => 'metadata_type', 'value' => 'Tainacan\Metadata_Types\Relationship' ] );
+
+			tainacan_register_admin_hook(
+				'metadatum',			// Entity
+				array( $this, 'form'),	// Form HTML callback
+				'end-left',				// Position
+				[ 'attribute' => 'metadata_type', 'value' => 'Tainacan\Metadata_Types\Relationship' ] // Conditional
+			);
 		}
 	}
 
-	function form() {
+	/**
+     * Callback passada para a função `tainacan_register_admin_hook` com o formulário interno que será
+     * passado para o modal de edição do metadado, contendo o campo extra da definição de metadado com 
+	 * filtros expandidos
+     */
+	public function form() {
 		if ( ! function_exists( 'tainacan_get_api_postdata' ) ) {
 			return '';
 		}
@@ -66,7 +104,7 @@ class Expanded_Filter_Relationship {
 					</label>
 					<div class="control is-expanded">
 						<span class="select is-fullwidth">
-							<select name="expanded_filter" id="expanded-filter-select">
+							<select name="<?php echo $this->has_expanded_filters_field; ?>" id="expanded-filter-select">
 								<option value="yes"><?php _e('Sim', 'tainacan-inventarios'); ?></option>
 								<option value="no"><?php _e('Não', 'tainacan-inventarios'); ?></option>
 							</select>
@@ -78,12 +116,27 @@ class Expanded_Filter_Relationship {
 		return ob_get_clean();
 	}
 
-	function add_meta_to_response( $extra_meta, $request ) {
-		$extra_meta = array_merge($extra_meta, array($this->is_expanded_filter_field));
+	/**
+     * Usa do filtro 'tainacan-api-response-item-meta' para fazer com que o campo que diz se o
+	 * metadado deve ter filtros expandidos ('tainacan-inventarios-has-expanded-filters') apareça no
+     * retorno da API quando usamos o endpoint de itens.
+     */
+	public function add_meta_to_response( $extra_meta, $request ) {
+		$extra_meta = array_merge( $extra_meta, array($this->has_expanded_filters_field) );
 		return $extra_meta;
 	}
 
-	function create($metadatum) {
+	/**
+     * Usa da action 'tainacan-insert-tainacan-metadatum' para de fato atualizar a entidade do metadado
+     * com o post meta 'tainacan-inventarios-has-expanded-filters', que guarda a informação se o metadado
+	 * possui ou não filtros expandidos.
+	 * 
+	 * Além disso, aproveita usa deste momento para criar os metadados internos escondidos (no Tainacan 
+	 * são chamados metadados de controle) que guardarão as cópias dos valores dos metadados originais do 
+	 * relacionamento.
+     */
+	public function create_control_metadata($metadatum) {
+
 		// Relacionamentos ou compostos dentro de relacionamentos não devem ser expandidos
 		if (
 			!$metadatum instanceof \Tainacan\Entities\Metadatum ||
@@ -95,10 +148,10 @@ class Expanded_Filter_Relationship {
 		}
 
 		$post = tainacan_get_api_postdata();
-		$expanded_filter = isset($post->expanded_filter) ? 'yes' == $post->expanded_filter : false;
-		update_post_meta( $metadatum->get_id(), $this->is_expanded_filter_field, $expanded_filter ? 'yes' : 'no');
+		$has_expanded_filters = isset($post[$this->has_expanded_filters_field]) ? 'yes' == $post[$this->has_expanded_filters_field] : false;
+		update_post_meta( $metadatum->get_id(), $this->has_expanded_filters_field, $has_expanded_filters ? 'yes' : 'no');
 
-		if ( $expanded_filter ) {
+		if ( $has_expanded_filters ) {
 			$options = $metadatum->get_metadata_type_options();
 			$relationship_name = $metadatum->get_name();
 			$colection_id = $metadatum->get_collection_id();
@@ -116,7 +169,7 @@ class Expanded_Filter_Relationship {
 					],
 					[
 						'key'     => '_option_control_metadatum',
-						'value'   => $this->is_expanded_filter_field,
+						'value'   => $this->has_expanded_filters_field,
 					],
 					[
 						'key'     => '_option_meta_relationship_id',
@@ -150,7 +203,7 @@ class Expanded_Filter_Relationship {
 					'display'         => 'never',
 					'multiple'        => 'yes',
 					'metadata_type_options' => [
-						'control_metadatum' => $this->is_expanded_filter_field,
+						'control_metadatum' => $this->has_expanded_filters_field,
 						'meta_relationship_id' => $metadatum->get_id(),
 						'meta_id' => $id,
 					]
@@ -179,11 +232,16 @@ class Expanded_Filter_Relationship {
 				}
 			}
 		} else {
-			tainacan_inventarios_expanded_filter_relationship_remove($metadatum);
+			$this->remove_control_metadata($metadatum);
 		}
 	}
 
-	function remove($metadatum) {
+	/**
+	 * Usa da action 'tainacan-deleted-tainacan-metadatum' para remover os metadados de controle
+	 * criados para a expansão dos filtros buscando não poluir a coleção com lixo nem deixar 
+	 * brecha para consultas com filtros quebrados.
+	 */
+	public function remove_control_metadata($metadatum) {
 		if ( !$metadatum instanceof \Tainacan\Entities\Metadatum || $metadatum->get_metadata_type() !== 'Tainacan\Metadata_Types\Relationship') { 
 			return;
 		}
@@ -200,7 +258,7 @@ class Expanded_Filter_Relationship {
 				],
 				[
 					'key'     => '_option_control_metadatum',
-					'value'   => $this->is_expanded_filter_field,
+					'value'   => $this->has_expanded_filters_field,
 				],
 				[
 					'key'     => '_option_meta_relationship_id',
@@ -218,7 +276,11 @@ class Expanded_Filter_Relationship {
 		}
 	}
 
-	function update_filter_values($item_metadata) {
+	/**
+	 * Usa da action 'tainacan-insert-Item_Metadata_Entity' para salvar a cópia atualizada do
+	 * metadado de controle com base no novo valor do metadado relacionado.
+	 */
+	public function update_control_metadata_values($item_metadata) {
 		if (! $item_metadata instanceof \Tainacan\Entities\Item_Metadata_Entity) {
 			return false;
 		}
@@ -243,7 +305,7 @@ class Expanded_Filter_Relationship {
 				],
 				[
 					'key'     => '_option_control_metadatum',
-					'value'   => $this->is_expanded_filter_field,
+					'value'   => $this->has_expanded_filters_field,
 				],
 				[
 					'key'     => '_option_meta_relationship_id',
@@ -312,7 +374,13 @@ class Expanded_Filter_Relationship {
 		}
 	}
 
-	function fetch_all_metadatum_values($return, $metadatum, $args) {
+	/**
+	 * Usa do filtro `tainacan-fetch-all-metadatum-values` para modificar a saída da função do repositório de 
+	 * metadados do Tainacan fetch_all_metadatum_values. Esta é a função que calcula a quantidade de itens que
+	 * uma faceta (um valor de metadado) tem dado uma certa consulta e é portanto essencial para a construção 
+	 * dos filtros com os somatórios de quantos itens tem por valor.
+	 */
+	public function fetch_all_metadatum_values($return, $metadatum, $args) {
 		$options = $metadatum->get_metadata_type_options();
 		$type = isset($options['type']) ? $options['type'] : false;
 
@@ -502,7 +570,7 @@ class Expanded_Filter_Relationship {
 
 	}
 
-	function replace_prepare_items_args($args, $request) {
+	public function replace_prepare_items_args($args, $request) {
 
 		if ( isset($args['meta_query']) ) {
 

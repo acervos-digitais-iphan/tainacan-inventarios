@@ -1,5 +1,26 @@
 <?php
 
+/**
+ * RESTRIÇÃO DE USUÁRIOS POR EQUIPE
+ * 
+ * Em um Acervo de Inventários, há uma granularidade maior de permissões de acesso do que a presente em
+ * acervos digitais tradicionais do Tainacan. No Tainacan, se um usuário tem permissões para editar itens
+ * em uma coleção, vai poder editar quaisquer itens dela. É possível restringir isso à "somente itens que
+ * o usuário é autor" ou "somente itens não-públicos", mas este critério não atende ao conjunto de condições
+ * esperadas pelo Inventário.
+ * 
+ * No inventário há o conceito de equipe responsável por cada projeto de inventário. Na impossibilidade de se
+ * criar um perfil de usuário para cada inventário, optou-se por definir um metadado do tipo usuário dentro
+ * da própria coleção de inventários. O metadado costuma ser privado e vai guardar a lista de usuários que
+ * poderão editar não só o próprio inventário, como também os itens de outras coleções que estejam relacionados
+ * ao inventário. 
+ * 
+ * Ou seja, para certos perfis de usuários (restrictive roles), o acesso será restrito por uma camada mais complexa.
+ * A princípio um usuário pode até ter permissão para editar itens de uma coleção. Mas se esta coleção tem um
+ * metadado de relacionamento com a coleção de inventários, o usuário só poderá editar o item se o mesmo estiver
+ * relacionado com um item de inventário cuja equipe incluir ele próprio.
+ */
+
 namespace Tainacan_Inventarios;
 
 // Evita acesso direto ao arquivo
@@ -10,6 +31,7 @@ class Restrict_Users_By_Team {
     use Singleton;
 
     private $team_metadatum_id_field = 'tainacan_inventarios_team_metadatum_id';
+    private $restrictive_roles_field = 'tainacan_inventarios_restrictive_roles';
 
     protected function init() {
 
@@ -20,7 +42,7 @@ class Restrict_Users_By_Team {
         add_action( 'tainacan-register-admin-hooks', array($this, 'register_admin_hooks') );
         
         // Lógica para salvar na entidade 'role' o campo extra com a opção de restrição de acesso para o perfil de usuário
-        add_action( 'tainacan-api-role-prepare-for-response', array($this, 'set_role_to_restrict_access_items_create'), 10, 2 );
+        add_action( 'tainacan-api-role-prepare-for-response', array($this, 'set_restrictive_roles'), 10, 2 );
 
         // Lógica para restringir as permissões de edição para usuários a depender do item
         add_filter( 'user_has_cap', array($this, 'user_has_cap_filter'), 20, 4 );
@@ -30,8 +52,12 @@ class Restrict_Users_By_Team {
     }
 
     /**
-     * Adciona a opção de metadado de equipe nas configurações do Tainacan.
-     */
+	 * Função que uso da action 'admin_init' para registrar uma nova 'option' do Tainacan,
+	 * que o ID do metadado de Equipe. A função 'create_tainacan_settings' usada é 
+     * responsável por montar o selectbox e registrar a option que é um wrapper na
+	 * api de options do WordPress. As opções passam a estar disponíveis no menu "Tainacan" 
+	 * -> "Outros" -> "Configurações" -> "Tainacan Inventários" -> "Metadado de Equipe"
+	 */
     public function settings_init() {
 
         $user_metadata = [];
@@ -72,33 +98,25 @@ class Restrict_Users_By_Team {
 		) );
     }
 
-    // Método auxiliar para facilitar a chamada ao metadado de equipe definido
+    /**
+     * Método utilitário para acesso a option que guarda o ID do metadado da equipe
+     */
     function get_team_metadatum_id() {
         return get_option('tainacan_option_' . $this->team_metadatum_id_field);
     }
 
-    // Método auxiliar para facilitar a chamada dos perfis que terão o acesso restrito com base na equipe e relacionamentos
-    public function get_restrictive_roles() {
-        $roles = get_option('tainacan_inventarios_set_role_to_restrict_access', []);
-        return $roles;
+    /**
+     * Método utilitário para facilitar a chamada dos perfis que terão o acesso restrito com base
+     * na equipe e relacionamentos
+     */
+    public function get_restrictive_roles() { 
+        return get_option($this->restrictive_roles_field, []);
     }
 
-    // public function get_collections_access_by_user() {
-    //     $user = \wp_get_current_user();
-    //     $roles_collections = get_option('tainacan_inventarios_collections_access_by_role', []);
-    //     $collections_ids = [];
-    //     $roles = $user->roles;
-
-    //     foreach( $roles as $role ) {
-    //         if ( isset($roles_collections[$role]) && is_array($roles_collections[$role]) ) {
-    //             $collections_ids = array_merge($collections_ids, $roles_collections[$role]);
-    //         }
-    //     }
-    //     return empty($collections_ids) ? false : $collections_ids;
-    // }
-
-    // Obtem os ids dos itens da coleção de inventário que o usuário atual tem acesso
-    // baseado no metadado de equipe.
+    /**
+     * Método para obter os ids dos itens da coleção de inventário que o usuário atual tem acesso
+     * baseado no metadado de equipe.
+     */
     public function get_current_user_allowed_inventarios_ids() {
         $restrictive_ids = array();
 
@@ -128,6 +146,11 @@ class Restrict_Users_By_Team {
         return $restrictive_ids;
     }
 
+    /**
+     * Método para obter os IDs de usuário que tem permissão para acessar um determinado
+     * item, baseando-se na presença ou não deles no metadado de equipe do item de inventário
+     * relacionado.
+     */
     public function get_allowed_users_ids($item) {
         $inventario_collection_id = Inventario_Post_Type::get_instance()->get_inventarios_collection_id();
         $team_metadatum_id = $this->get_team_metadatum_id();
@@ -166,6 +189,10 @@ class Restrict_Users_By_Team {
         return $team_users;
     }
 
+    /**
+     * Usa do filtro 'user_has_cap' para filtrar as permissões que certo usuário terá,
+     * baseando-se no que está sendo acessado ($entity_id)
+     */
     public function user_has_cap_filter( $allcaps, $caps, $args, $user ) {
         $exist_roles = !empty(array_intersect($this->get_restrictive_roles(), $user->roles));
         
@@ -180,12 +207,10 @@ class Restrict_Users_By_Team {
                     $col_id = $item->get_collection_id();
 
                     $allowed_users_ids = $this->get_allowed_users_ids($item);
-                    //$collections_access_by_user = $this->get_collections_access_by_user();
                     
                     if ( 
                         $allowed_users_ids === false ||
                         in_array($col_id, $control_collections_ids)
-                        //|| ($collections_access_by_user !== false && in_array($col_id, $collections_access_by_user))
                     ) {
                         return $allcaps;
                     }
@@ -210,7 +235,8 @@ class Restrict_Users_By_Team {
     }
 
     /**
-     * Filtra os argumentos para buscar itens com base nos papéis do usuário e nos metadados restritivos.
+     * Usa do filtro 'tainacan-fetch-args' (indiretamente, chamado pela 'fetch_args') para filtrar os argumentos
+     * para buscar itens na API REST do Tainacan com base nos papéis do usuário e nos metadados restritivos.
      */
     public function fetch_items_args($args, $user) {
         $exist_roles = !empty(array_intersect($this->get_restrictive_roles(), $user->roles));
@@ -291,6 +317,10 @@ class Restrict_Users_By_Team {
         return $args;
     }
 
+    /**
+     * Usa do filtro 'tainacan-fetch-args' (indiretamente, chamado pela 'fetch_args') para filtrar os argumentos
+     * para buscar coleções na API REST do Tainacan com base nos papéis do usuário e nos metadados restritivos.
+     */
     public function fetch_collections_args($args, $user) {
         if ( $args['posts_per_page'] == -1 ) {
             return $args;
@@ -327,13 +357,6 @@ class Restrict_Users_By_Team {
                 $args['post__in'] = $collections_ids;
             }
         }
-        
-        // $col_ids = $this->get_collections_access_by_user();
-        
-        // if ( $col_ids !== false ) {
-        //     if (  isset($args['post__in']) ) $col_ids = array_merge($col_ids, $args['post__in']);
-        //     $args['post__in'] = $col_ids;
-        // }
 
         if ( !$user->has_cap('manage_tainacan') ) {
             $control_collections_ids = Control_Collections::get_instance()->get_control_collections_ids();
@@ -343,6 +366,9 @@ class Restrict_Users_By_Team {
         return $args;
     }
 
+    /**
+     * Usa do filtro 'tainacan-fetch-args' para filtrar os argumentos de busca da API REST do Tainacan.
+     */
     public function fetch_args($args, $type) {
         $user = \wp_get_current_user();
         
@@ -355,81 +381,63 @@ class Restrict_Users_By_Team {
         return $args;
     }
 
+    /**
+     * Usa da action 'tainacan-register-admin-hooks' para registrar uma nova área de formulários extra na 
+     * página de edição dos perfis de usuário do Tainacan, onde ficará a nova opção relacionadas à restrição
+     * de usuário baseando-se na equipe.
+     */
     public function register_admin_hooks() {
         if ( function_exists( 'tainacan_register_admin_hook' ) ) {
-            tainacan_register_admin_hook( 'role', [$this, 'set_role_to_restrict_access_items_form'], 'end-right' );
+
+            tainacan_register_admin_hook(
+                'role',                 // Entity
+                array( $this, 'form' ), // Form HTML Callback
+                'end-right'             // Position
+            );
         }
     }
 
-    public function set_role_to_restrict_access_items_form() {
+    /**
+     * Callback passada para a função `tainacan_register_admin_hook` com o formulário interno que será
+     * passado para a página de edição de perfil de usuário, contendo o campo extra da configuração de
+     * restrição de acesso.
+     */
+    public function form() {
         ob_start();
         ?>
             <div class="name-edition-box tainacan-set-role-to-restrict-access">
-                <label for="set_role_to_restrict_access"><?php _e('Restringir edição dos itens baseando-se no metadado de equipe', 'tainacan-inventarios'); ?></label>
-                <select name="set_role_to_restrict_access" id="set-user-to-restrict-access-select">
+                <label for="is_restrictive"><?php _e('Restringir edição dos itens baseando-se no metadado de equipe', 'tainacan-inventarios'); ?></label>
+                <select name="is_restrictive" id="set-user-to-restrict-access-select">
                     <option value="yes"><?php _e('Sim', 'tainacan-inventarios'); ?></option>
                     <option value="no"><?php _e('Não', 'tainacan-inventarios'); ?></option>
                 </select>
                 <p><span class="dashicons dashicons-info"></span>&nbsp;<?php _e('Com esta opção ativa, o usuário terá acesso restrito mesmo à coleções que pode editar. Se uma coleção tiver um metadado de relacionamento com a coleção de inventários, ele só poderá editar itens relacionados com inventários dos quais faça parte da equipe.', 'tainacan-inventarios'); ?></p>
             </div>
-            <!-- <br>
-            <div class="name-edition-box tainacan-collections_access_by_role" >
-                <h2 style="margin-bottom: -1em; font-size: 0.875rem;"><?php _e('Conceder acesso também ao seguinte conjunto de coleções:', 'tainacan-inventarios'); ?></h2>
-                <ul class="collections-container capabilities-list" style="justify-content: flex-start; 0 0.5em 0.5em;">
-                    <?php foreach(\tainacan_collections()->fetch([], 'OBJECT') as $col): ?>
-                        <li style="flex-basis: 400px; margin-right: unset;">
-                            <span class="check-column">
-                                <label for="<?php echo $col->get_id(); ?>" class="screen-reader-text">
-                                    <?php echo $col->get_name(); ?>
-                                </label>
-                                <input type="checkbox" name="collections_access_by_role" id="<?php echo $col->get_id(); ?>" value="<?php echo $col->get_id(); ?>">
-                            </span>
-                            <span class="name column-name">
-                                <?php echo $col->get_name(); ?>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <p><span class="dashicons dashicons-info"></span>&nbsp;<?php _e('Se nenhuma coleção for marcada, todas as com direito de acesso serão vistas obedecendo seu status.', 'tainacan-inventarios'); ?></p>
-            </div> -->
-            
         <?php
         return ob_get_clean();
     }
 
-    public function set_role_to_restrict_access_items_create($role, $request) {
+    /**
+     * Usa da action 'tainacan-api-role-prepare-for-response' para de fato atualizar a option onde está
+     * sendo guardado um array com opções extras para cada perfil de usuário criadas pelo plugin.
+     */
+    public function set_restrictive_roles($role, $request) {
         $slug = $role['slug'];
-        $roles = get_option('tainacan_inventarios_set_role_to_restrict_access', []);
-        //$roles_collections = get_option('tainacan_inventarios_collections_access_by_role', []);
-        //$roles_collections = is_array($roles_collections) ? $roles_collections : [];
+        $roles = get_option($this->restrictive_roles_field, []);
 
         if ( $request->get_method() != 'GET') {
-
-            // if ( isset($request['collections_access_by_role']) ) {
-            //     $update_col = $request['collections_access_by_role'];
-            //     update_option('tainacan_inventarios_collections_access_by_role', array_merge($roles_collections, [ $slug => $update_col ] ) );
-            //     $role['collections_access_by_role'] = $update_col;
-            // } else {
-            //     if ( isset($roles_collections[$slug]) ) unset($roles_collections[$slug]);
-            //         update_option('tainacan_inventarios_collections_access_by_role', $roles_collections );
-            // }
-
-            if ( isset($request['set_role_to_restrict_access']) ) {
-
-                if ($request['set_role_to_restrict_access'] == 'yes') {
-                    update_option('tainacan_inventarios_set_role_to_restrict_access', array_merge($roles, [ $slug ] ) );
-                    $role['set_role_to_restrict_access'] = 'yes';
+            if ( isset($request['is_restrictive']) ) {
+                if ($request['is_restrictive'] == 'yes') {
+                    update_option($this->restrictive_roles_field, array_merge($roles, [ $slug ] ) );
+                    $role['is_restrictive'] = 'yes';
                 } else {
-                    update_option('tainacan_inventarios_set_role_to_restrict_access', array_filter($roles, function($el) use ($slug) { return $el != $slug; } ) );
-                    $role['set_role_to_restrict_access'] = 'no';
+                    update_option($this->restrictive_roles_field, array_filter($roles, function($el) use ($slug) { return $el != $slug; } ) );
+                    $role['is_restrictive'] = 'no';
                 }
             }
-
         } else {
-            $set_role = in_array($slug, $roles);
-            //$collections_role =  isset($roles_collections[$slug]) ? $roles_collections[$slug] : [];
-            //$role['collections_access_by_role'] = $collections_role;
-            $role['set_role_to_restrict_access'] = $set_role ? 'yes' : 'no';
+            $is_restrictive = in_array($slug, $roles);
+            $role['is_restrictive'] = $is_restrictive ? 'yes' : 'no';
         }
 
         return $role;

@@ -1,5 +1,22 @@
 <?php
 
+/**
+ * PÁGINAS E COLEÇÃO DE INVENTÁRIO
+ * 
+ * Em um Acervo de Inventários, os Inventários são a entidade mais importante, ao redor dos quais se
+ * definem e constituem uma série de dados estruturados (coleções relacionadas) e não estruturados
+ * (páginas de apresentação).
+ * 
+ * Nestas classe está implementada a lógica para configuração de qual coleção será "A coleção de 
+ * inventário", ou seja, aquela que guardará os dados estruturados relacionados a cada inventário 
+ * (seus itens). Também está implementada a lógica para criação de um Post Type 'inventarios'. Este
+ * tipo de post permite que sejam criadas páginas usando editor de blocos do WordPress com 
+ * flexibilidade para se customizar aparência de um conteúdo editorial mais livre. Por fim há a
+ * lógica para se estabelecer um vínculo entre o item da coleção com a página de inventário, fazendo
+ * com que os dois tipos de dados possam ser mostrados juntos para o público, mesmo que geridoos por
+ * ferramentas diferentes (Tainacan e Gutenberg).
+ */
+
 namespace Tainacan_Inventarios;
 
 // Evita acesso direto ao arquivo
@@ -30,8 +47,12 @@ class Inventario_Post_Type {
     }
 
     /**
-     * Adiciona opção de coleção de inventários nas configurações do Tainacan.
-     */
+	 * Função que usa da action 'admin_init' para registrar uma nova 'option' do Tainacan,
+	 * que é o ID da coleções de Inventários. A função 'create_tainacan_settings' usada
+	 * é responsável por montar o selectbox e registrar a option que é um wrapper na
+	 * api de options do WordPress. As opções passam a estar disponíveis no menu "Tainacan" 
+	 * -> "Outros" -> "Configurações" -> "Tainacan Inventários" -> "Coleção de Inventário"
+	 */
     public function settings_init() {
 
 		add_settings_section(
@@ -66,7 +87,7 @@ class Inventario_Post_Type {
     }
 
     /**
-     * Registers the inventarios post type.
+     * Usa da action 'init' para registrar o tipo de post dedicado às páginas de inventários.
      */
     public function register_post_type() {
         $args = array(
@@ -113,6 +134,11 @@ class Inventario_Post_Type {
         register_post_type('inventarios', $args);
     }
 
+    /**
+     * Breve descrição sobre a seção de opções registrada pelo plugin de inventários.
+     * Esta descrição aparecerá no menu "Tainacan" -> "Outros" -> "Configurações" ->
+     * "Tainacan Inventários"
+     */
     public function inventarios_section_description() {
 	?>
 		<p class="settings-section-description">
@@ -121,12 +147,28 @@ class Inventario_Post_Type {
 	<?php
 	}
 
+    /**
+     * Usa da action 'tainacan-register-admin-hooks' para registrar uma nova área de formulários
+     * extra na página de edição do item Tainacan, onde ficará a opção relacionada à página de
+     * inventário
+     */
     function register_hook() {
 		if ( function_exists( 'tainacan_register_admin_hook' ) ) {
-			tainacan_register_admin_hook( 'item', array( $this, 'form' ), 'begin-left', array( 'collectionId' => '' . $this->get_inventarios_collection_id() ) );
+
+			tainacan_register_admin_hook(
+                'item',                 // Entity
+                array( $this, 'form' ), // Form HTML Callback
+                'begin-left',           // Position
+                array( 'collectionId' => '' . $this->get_inventarios_collection_id() )  // Conditional
+            );
 		}
 	}
 
+    /**
+     * Usa da action 'tainacan-insert-tainacan-item' para de fato atualizar a entidade do item
+     * com o post meta 'tainacan-inventarios-inventario-post-id', que guardará o ID da página
+     * do inventário
+     */
     function save_data( $object ) {
         if ( ! function_exists( 'tainacan_get_api_postdata' ) ) {
 			return;
@@ -141,13 +183,21 @@ class Inventario_Post_Type {
 		}
     }
 
+    /**
+     * Usa do filtro 'tainacan-api-response-item-meta' para fazer com que o campo com ID da página
+     * de inventário salvo no post meta 'tainacan-inventarios-inventario-post-id' apareça no
+     * retorno da API quando usamos o endpoint de itens.
+     */
     function add_meta_to_response( $extra_meta, $request ) {
-		$extra_meta = array(
-			$this->inventario_post_id_field
-		);
+		$extra_meta = array_merge( $extra_meta, array($this->inventario_post_id_field) );
 		return $extra_meta;
 	}
 
+    /**
+     * Callback passada para a função `tainacan_register_admin_hook` com o formulário interno que será
+     * passado para a página de edição de item, contendo o campo extra da configuração de página de 
+     * inventário.
+     */
     function form() {
 		if ( !function_exists( 'tainacan_get_api_postdata' ) )
 			return '';
@@ -184,6 +234,10 @@ class Inventario_Post_Type {
 		return ob_get_clean();
 	}
  
+    /**
+     * Usa do filtro 'the_content' para substituir o "miolo" das página de Itens da coleção de inventários
+     * pelo conteúdo gerado na página configurada como "Página do Inventário".
+     */
     function custom_the_content ($content) {
         if (!is_singular()) return $content;
 
@@ -192,20 +246,25 @@ class Inventario_Post_Type {
         $redirect_id = get_post_meta($post->ID, $this->inventario_post_id_field, true);
         $redirect_id = absint($redirect_id);
 
-        if (!$redirect_id || $redirect_id === $post->ID) {
+        if ( !$redirect_id || $redirect_id === $post->ID ) {
             return $content; // evita loop ou valores inválidos
         }
 
         $redirect_post = get_post($redirect_id);
 
-        if ( $redirect_post && $redirect_post->post_status === 'publish') {
+        if ( $redirect_post && ( $redirect_post->post_status == 'publish' ||  $redirect_post->post_status == 'private' ) ) {
             return do_blocks($redirect_post->post_content);
         }
 
         return $content;
     }
 
-
+    /**
+     * Array PHP de notação de Blocos Gutenberg contendo o template inicial de uma página de inventário.
+     * Com esta definição, ao criarmos um novo post do tipo Inventário no editor de blocos, os seguintes
+     * blocos já vem inseridos com algum conteúdo placeholder, deixando por conta do usuário a definição
+     * do restante da informação.
+     */
     function get_inventario_template() {
         return [
             [
@@ -260,9 +319,11 @@ class Inventario_Post_Type {
         ];
     }
 
+    /**
+     * Método utilitário para acesso a option que guarda o ID da coleção de inventários.
+     */
     function get_inventarios_collection_id() {
         return get_option('tainacan_option_' . $this->inventarios_collection_id_field);
     }
-
 }
 

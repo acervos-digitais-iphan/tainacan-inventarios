@@ -1,5 +1,23 @@
 <?php
 
+/**
+ * COLEÇÕES DE CONTROLE
+ * 
+ * Em diversas coleções de um Acervo de Inventários, são utilizados metadados tipo relacionamento,
+ * onde um item de uma coleção se relaciona com um item de outra coleção. Esta última, serviria 
+ * para listar dados que complementam esta relação apenas. Seria uma espécie de "categorização" das
+ * Coleções. Existem aquelas que de fato são relevantes de se estarem listadas e portanto devem ser
+ * pesquisáveis e aparecerem direto no painel administrativo. Outras coleções, porém, guardam 
+ * informações que só fazem sentido quando reaproveitadas como fonte de dados nas demais coleções,
+ * dentro dos relacionamentos. Elas não poderiam, porém, ser coleções privadas, pois o usuário comum
+ * ainda precisaria poder criar itens nela - a partir do metadado de relacionamento. Estas coleções
+ * chamamos de Coleções de Controle.
+ * 
+ * Esta classe implementa a lógica necessária para categorização de coleções como controle e as 
+ * restrições de acesso ou modificações de interface que elas demandam. Optou-se por guardar a lista
+ * de coleções de controle em uma option 'tainacan_option_tainacan_inventarios_control_collections'.
+ */
+
 namespace Tainacan_Inventarios;
 
 // Evita acesso direto ao arquivo
@@ -20,9 +38,19 @@ class Control_Collections {
 		add_action( 'admin_head', array( $this, 'customize_control_collection_css' ));
 
 		// Filtra requisições para mostrar apenas coleções que não são de controle
-		add_action( 'pre_get_posts', array( $this, 'show_only_not_control_collections' ) );
+		add_action( 'pre_get_posts', array( $this, 'hide_control_collections_from_get_posts' ) );
+
+		// Filtra os cards de coleções de Controle no Dashboard
+		add_filter( 'tainacan-dashboard-cards', array( $this, 'hide_control_collections_from_tainacan_dashboard' ) );
 	}
 
+	/**
+	 * Função que usa da action 'admin_init' para registrar uma nova 'option' do Tainacan,
+	 * que guarda o vetor de coleções de controle. A função 'create_tainacan_settings' usada
+	 * é responsável por montar a lista de checkbox e registrar a option que é um wrapper na
+	 * api de options do WordPress. As opções passam a estar disponíveis no menu "Tainacan" 
+	 * -> "Outros" -> "Configurações" -> "Tainacan Inventários" -> "Coleções de Controle"
+	 */
 	public function settings_init() {
 
         $collections = \tainacan_collections()->fetch(array(), 'OBJECT');
@@ -57,7 +85,12 @@ class Control_Collections {
 		) );
 	}
 
-	function customize_control_collection_css() {
+	/**
+	 * Função que usa da action 'admin_head' para acrescentar CSS inline no admin.
+	 * Este CSS estiliza coleções de controle no Admin do Tainacan, em especial no contexto de 
+	 * edições de item via metadados de relacionamento.
+	 */
+	public function customize_control_collection_css() {
 		$control_collection_ids = $this->get_control_collections_ids();
 
 		if ( empty($control_collection_ids) )
@@ -222,7 +255,11 @@ class Control_Collections {
 		echo '<style type="text/css" id="tainacan-control-collections-style">' . sprintf( $css ) . '</style>';
 	}
 
-	function show_only_not_control_collections($query) {
+	/**
+	 * Função que usa da action 'pre_get_posts' para filtrar a maioria das requisições feitas 
+	 * por coleções do tainacan, retirando as as coleções de controle
+	 */
+	public function hide_control_collections_from_get_posts($query) {
 
 		if ( !is_admin() && $query->is_archive() && is_post_type_archive( 'tainacan-collection' ) ) {
 			$query->query_vars['exclude'] = array_merge(
@@ -232,7 +269,34 @@ class Control_Collections {
 		}
 	}
 
-	function get_control_collections_ids() {
+	/**
+	 * Função que usa do filtro 'tainacan-dashboard-cards' para retirar da lista de
+	 * cartões do dashboard do Tainacan as coleções de controle.
+	 */
+	public function hide_control_collections_from_tainacan_dashboard($tainacan_dashboard_cards) {
+
+		$control_collections = $this->get_control_collections_ids();
+		
+		return array_filter(
+			$tainacan_dashboard_cards,
+			
+			function($dashboard_card) use ($control_collections) {
+				
+				return !str_contains($dashboard_card['id'], 'tainacan-dashboard-collection-card-') || 
+					!in_array(
+						$dashboard_card['id'], 
+						array_map(function($collection_id) {
+							return 'tainacan-dashboard-collection-card-' . $collection_id;
+						}, $control_collections)
+					);
+			}
+		);
+	}
+
+	/**
+	 * Método utilitário para acesso a option que guarda os IDs das coleções de controle
+	 */
+	public function get_control_collections_ids() {
 		return get_option('tainacan_option_' . $this->control_collections_field, [] );
 	}
 }
