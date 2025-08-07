@@ -131,7 +131,7 @@ class Expanded_Filter_Relationship {
      * com o post meta 'tainacan-inventarios-has-expanded-filters', que guarda a informação se o metadado
 	 * possui ou não filtros expandidos.
 	 * 
-	 * Além disso, aproveita usa deste momento para criar os metadados internos escondidos (no Tainacan 
+	 * Além disso, aproveita deste momento para criar os metadados internos escondidos (no Tainacan 
 	 * são chamados metadados de controle) que guardarão as cópias dos valores dos metadados originais do 
 	 * relacionamento.
      */
@@ -141,14 +141,14 @@ class Expanded_Filter_Relationship {
 		if (
 			!$metadatum instanceof \Tainacan\Entities\Metadatum ||
 			$metadatum->get_metadata_type() !== 'Tainacan\Metadata_Types\Relationship' ||
-			$metadatum->get_metadata_type() !== 'Tainacan\Metadata_Types\Compound' ||
 			!$metadatum->can_edit()
 		) {
 			return;
 		}
 
 		$post = tainacan_get_api_postdata();
-		$has_expanded_filters = isset($post[$this->has_expanded_filters_field]) ? 'yes' == $post[$this->has_expanded_filters_field] : false;
+		$field_name = $this->has_expanded_filters_field;
+		$has_expanded_filters = isset($post->$field_name) ? 'yes' == $post->$field_name : false;
 		update_post_meta( $metadatum->get_id(), $this->has_expanded_filters_field, $has_expanded_filters ? 'yes' : 'no');
 
 		if ( $has_expanded_filters ) {
