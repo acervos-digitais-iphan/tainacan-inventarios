@@ -255,7 +255,7 @@ class Restrict_Users_By_Team {
             if ( !is_numeric($current_collection_id) || !$inventario_collection_id ) {
                 return $args;
             }
-
+            
             // Se estamos buscando itens da coleção do Inventário, restringimos pelo metadado da equipe
             if ( $current_collection_id == $inventario_collection_id ) {
                 $team_metadatum_id = $this->get_team_metadatum_id();
@@ -276,25 +276,28 @@ class Restrict_Users_By_Team {
             // relacionamento com a coleção do Inventário, restringimos pelo metadado de equipe
             // do item de inventário relacionado.
             } else {
-                $current_collection = \tainacan_collections()->fetch($current_collection_id);
-                $relationship_metadata = \tainacan_metadata()->fetch_by_collection($current_collection,
-                    array(
+                $current_collection = \tainacan_collections()->fetch($current_collection_id, 'OBJECT');
+                $query_args =   array(
                         'meta_query' => [
                             [
                                 'key'   => 'metadata_type',
-                                'value' => 'Tainacan\Metadata_Types\Relationship'
+                                'value' => 'Tainacan\\Metadata_Types\\Relationship'
                             ],
                             [
                                 'key' => '_option_collection_id',
                                 'value' => $inventario_collection_id,
                             ]
                         ]
-                    )
                 );
+                
+                $relationship_metadata = \tainacan_metadata()->fetch_by_collection($current_collection,
+                  $query_args,
+                    'OBJECT'
+                );
+
                 // Idealmente haverá apenas um metadado de relacionamento desta coleção com a
                 // coleção do Inventário, mas vamos iterar...
                 foreach ( $relationship_metadata as $relationship_metadatum ) {
-                    
                     $inventario_items_ids = $this->get_current_user_allowed_inventarios_ids();
                     
                     if ( $inventario_items_ids === false ) {
@@ -313,7 +316,6 @@ class Restrict_Users_By_Team {
                 }
             }
         }
-
         return $args;
     }
 
@@ -371,9 +373,18 @@ class Restrict_Users_By_Team {
      */
     public function fetch_args($args, $type) {
         $user = \wp_get_current_user();
-        
         if ( $type == 'items' ) {
+        
+            $has_filter_posts_pre_query = has_filter( 'posts_pre_query', '__return_empty_array' );
+            if ( $has_filter_posts_pre_query ) {
+                remove_filter('posts_pre_query', '__return_empty_array');
+            }
+
             $args = $this->fetch_items_args($args, $user);
+
+            if ( $has_filter_posts_pre_query ) {
+                add_filter('posts_pre_query', '__return_empty_array');
+            }
         } elseif ( $type == 'collections' ) {
             $args = $this->fetch_collections_args($args, $user);
         }

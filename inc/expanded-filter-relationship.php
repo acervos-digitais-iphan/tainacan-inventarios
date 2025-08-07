@@ -358,7 +358,7 @@ class Expanded_Filter_Relationship {
 					if ( $taxonomy instanceof Entities\Taxonomy ) {
 						\wp_set_object_terms( $item->get_id(), $value, $taxonomy->get_db_identifier() );
 					} else {
-						error_log( "Taxonomy not found!" );
+						error_log( "Taxonomy not found: !" . $taxonomy_id );
 					}
 				} else {
 					$update_item_metadatum = new \Tainacan\Entities\Item_Metadata_Entity( $item, $item_metadatum );
